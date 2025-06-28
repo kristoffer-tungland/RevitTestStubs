@@ -18,6 +18,11 @@ namespace Autodesk.Revit.DB
                     ?? throw new InvalidOperationException("get_Guid not configured.");
             }
         }
+
+        public override void Dispose()
+        {
+            Configure.Dispose?.Invoke();
+        }
     }
 
     public partial class ParameterConfiguration : ElementConfiguration

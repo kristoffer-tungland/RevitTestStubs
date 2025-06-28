@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 
 namespace RevitStubGenerator
 {
@@ -25,86 +25,174 @@ namespace RevitStubGenerator
             using var mlc = new MetadataLoadContext(resolver);
             var asm = mlc.LoadFromAssemblyPath(assemblyPath);
 
-            foreach (var type in asm.GetTypes().Where(t => t.IsPublic && !t.IsNested))
+            foreach (var type in asm.GetTypes().Where(t => t.IsPublic && !t.IsNested && t.IsClass))
             {
-                if (type.Namespace is null) continue;
+                if (type.Namespace is null)
+                    continue;
+
                 var code = GenerateStub(type);
-                var fileName = Path.Combine(outputDir, type.Name + ".cs");
+
+                var dir = Path.Combine(outputDir, type.Namespace.Replace('.', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(dir);
+                var fileName = Path.Combine(dir, type.Name + ".cs");
                 File.WriteAllText(fileName, code);
             }
         }
 
         private static string GenerateStub(Type type)
         {
-            var ns = type.Namespace;
+            var currentNs = type.Namespace!;
+            var usings = CollectNamespaces(type);
+
             var baseType = type.BaseType != null && type.BaseType != typeof(object)
-                ? $" : {type.BaseType.FullName}"
+                ? $" : {GetTypeName(type.BaseType, currentNs)}"
                 : string.Empty;
 
             var writer = new System.Text.StringBuilder();
-            writer.AppendLine("using System;");
+            foreach (var ns in usings.OrderBy(u => u))
+                writer.AppendLine($"using {ns};");
+
             writer.AppendLine();
-            writer.AppendLine($"namespace {ns}");
+            writer.AppendLine($"namespace {currentNs}");
             writer.AppendLine("{");
             writer.AppendLine($"    public partial class {type.Name}{baseType}");
             writer.AppendLine("    {");
+            writer.AppendLine($"        public {type.Name}Configuration Configure {{ get; }} = new();");
 
-            if (type.Name == "Element")
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(m => !m.IsSpecialName).ToArray();
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+
+            int methodIndex = 0;
+            foreach (var method in methods)
             {
-                writer.AppendLine("        public ElementId Id { get; }");
-                writer.AppendLine("        public ElementConfiguration Configure { get; } = new();");
+                var parameters = string.Join(", ", method.GetParameters()
+                    .Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var args = string.Join(", ", method.GetParameters().Select(p => p.Name));
+                var ret = GetTypeName(method.ReturnType, currentNs);
+                var delegateName = $"{method.Name}_{methodIndex++}";
+
                 writer.AppendLine();
-                writer.AppendLine("        public Element(ElementId id)");
+                writer.AppendLine($"        public virtual {ret} {method.Name}({parameters})");
                 writer.AppendLine("        {");
-                writer.AppendLine("            Id = id;");
+                if (method.ReturnType == typeof(void))
+                {
+                    writer.AppendLine($"            var del = Configure.{delegateName};");
+                    writer.AppendLine($"            if (del != null) {{ del({args}); return; }}");
+                    writer.AppendLine($"            throw new InvalidOperationException(\"{method.Name} not configured.\");");
+                }
+                else
+                {
+                    writer.AppendLine($"            return Configure.{delegateName}?.Invoke({args}) ?? throw new InvalidOperationException(\"{method.Name} not configured.\");");
+                }
                 writer.AppendLine("        }");
-                writer.AppendLine();
-                writer.AppendLine("        public Element(int id) : this(new ElementId(id)) {}");
-                writer.AppendLine("    }");
-                writer.AppendLine();
-                writer.AppendLine("    public partial class ElementConfiguration");
-                writer.AppendLine("    {");
-                writer.AppendLine("        public Func<Guid, Parameter>? GetParameter { get; set; }");
-                writer.AppendLine("        public Action? Dispose { get; set; }");
-                writer.AppendLine("    }");
-                writer.AppendLine("}");
-                return writer.ToString();
             }
-            else if (type.Name == "Parameter")
+
+            foreach (var prop in properties)
             {
-                writer.AppendLine("        public new ParameterConfiguration Configure { get; } = new();");
+                var typeName = GetTypeName(prop.PropertyType, currentNs);
                 writer.AppendLine();
-                writer.AppendLine("        public Parameter(ElementId id) : base(id) { }");
-                writer.AppendLine("        public Parameter(int id) : base(id) { }");
-                writer.AppendLine();
-                writer.AppendLine("        public Guid GUID => Configure.get_Guid?.Invoke() ?? throw new InvalidOperationException(\"get_Guid not configured.\");");
-                writer.AppendLine("    }");
-                writer.AppendLine();
-                writer.AppendLine("    public partial class ParameterConfiguration : ElementConfiguration");
-                writer.AppendLine("    {");
-                writer.AppendLine("        public Func<Guid>? get_Guid { get; set; }");
-                writer.AppendLine("    }");
-                writer.AppendLine("}");
-                return writer.ToString();
-            }
-            else if (type.Name == "ElementId")
-            {
-                writer.AppendLine("        public int IntegerValue { get; }");
-                writer.AppendLine();
-                writer.AppendLine("        public ElementId(int value)");
+                writer.AppendLine($"        public virtual {typeName} {prop.Name}");
                 writer.AppendLine("        {");
-                writer.AppendLine("            IntegerValue = value;");
+                if (prop.CanRead)
+                    writer.AppendLine($"            get => Configure.get_{prop.Name}?.Invoke() ?? throw new InvalidOperationException(\"get_{prop.Name} not configured.\");");
+                if (prop.CanWrite)
+                    writer.AppendLine($"            set => Configure.set_{prop.Name}?.Invoke(value);");
                 writer.AppendLine("        }");
-                writer.AppendLine("    }");
-                writer.AppendLine("}");
-                return writer.ToString();
+            }
+
+            writer.AppendLine("    }");
+            writer.AppendLine();
+            writer.AppendLine($"    public partial class {type.Name}Configuration");
+            writer.AppendLine("    {");
+
+            methodIndex = 0;
+            foreach (var method in methods)
+            {
+                var delegateName = $"{method.Name}_{methodIndex++}";
+                var paramTypes = method.GetParameters().Select(p => GetTypeName(p.ParameterType, currentNs)).ToList();
+                string delegateType;
+                if (method.ReturnType == typeof(void))
+                {
+                    delegateType = paramTypes.Count == 0 ? "Action" : $"Action<{string.Join(", ", paramTypes)}>";
+                }
+                else
+                {
+                    paramTypes.Add(GetTypeName(method.ReturnType, currentNs));
+                    delegateType = $"Func<{string.Join(", ", paramTypes)}>";
+                }
+                writer.AppendLine($"        public {delegateType}? {delegateName} {{ get; set; }}");
+            }
+
+            foreach (var prop in properties)
+            {
+                var tName = GetTypeName(prop.PropertyType, currentNs);
+                if (prop.CanRead)
+                    writer.AppendLine($"        public Func<{tName}>? get_{prop.Name} {{ get; set; }}");
+                if (prop.CanWrite)
+                    writer.AppendLine($"        public Action<{tName}>? set_{prop.Name} {{ get; set; }}");
+            }
+
+            writer.AppendLine("    }");
+            writer.AppendLine("}");
+            return writer.ToString();
+        }
+
+        private static HashSet<string> CollectNamespaces(Type type)
+        {
+            var namespaces = new HashSet<string> { "System" };
+            void Add(Type? t)
+            {
+                if (t == null) return;
+                if (t.IsGenericType)
+                {
+                    foreach (var arg in t.GetGenericArguments())
+                        Add(arg);
+                    t = t.GetGenericTypeDefinition();
+                }
+                if (!string.IsNullOrEmpty(t.Namespace) && t.Namespace != type.Namespace)
+                    namespaces.Add(t.Namespace);
+            }
+
+            Add(type.BaseType);
+            foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
+            {
+                if (m.IsSpecialName) continue;
+                Add(m.ReturnType);
+                foreach (var p in m.GetParameters())
+                    Add(p.ParameterType);
+            }
+            foreach (var p in type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
+                Add(p.PropertyType);
+
+            return namespaces;
+        }
+
+        private static string GetTypeName(Type t, string currentNs)
+        {
+            if (t == typeof(void))
+                return "void";
+
+            if (t.IsGenericParameter)
+                return t.Name;
+
+            string name;
+            if (t.IsGenericType)
+            {
+                var def = t.GetGenericTypeDefinition();
+                name = def.Name.Substring(0, def.Name.IndexOf('`'));
+                var args = t.GetGenericArguments().Select(a => GetTypeName(a, currentNs));
+                name += "<" + string.Join(", ", args) + ">";
             }
             else
             {
-                writer.AppendLine("    }");
-                writer.AppendLine("}");
-                return writer.ToString();
+                name = t.Name;
             }
+
+            if (!string.IsNullOrEmpty(t.Namespace) && t.Namespace != currentNs)
+                return t.Namespace + "." + name;
+
+            return name;
         }
     }
 }
