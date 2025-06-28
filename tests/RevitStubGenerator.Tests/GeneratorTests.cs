@@ -15,6 +15,17 @@ public class GeneratorTests
         _output = output;
     }
 
+    [Fact]
+    public void Generates_generic_method_stub()
+    {
+        var result = GenerateClass(typeof(GenericSample));
+        _output.WriteLine(result);
+
+        Assert.Contains("public virtual T GetValue<T>(System.String key)", result);
+        Assert.Contains("Func<System.String, System.Type, object?>? GetValue_0", result);
+        Assert.Contains("typeof(T)", result);
+    }
+
     private static string GenerateClass(Type type)
     {
         var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
@@ -145,4 +156,9 @@ public class GeneratorTests
     }
 
     public delegate int SampleDelegate(string text);
+
+    public class GenericSample
+    {
+        public T GetValue<T>(string key) => default!;
+    }
 }
