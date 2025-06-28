@@ -58,8 +58,21 @@ namespace StubGenerator
             var currentNs = type.Namespace!;
             var usings = CollectNamespaces(type);
 
-            var baseType = type.BaseType != null && type.BaseType != typeof(object)
-                ? $" : {GetTypeName(type.BaseType, currentNs)}"
+            var baseParts = new List<string>();
+            if (type.BaseType != null && type.BaseType != typeof(object))
+                baseParts.Add(GetTypeName(type.BaseType, currentNs));
+
+            var interfaces = type.GetInterfaces();
+            if (type.BaseType != null)
+            {
+                var baseInterfaces = new HashSet<Type>(type.BaseType.GetInterfaces());
+                interfaces = interfaces.Where(i => !baseInterfaces.Contains(i)).ToArray();
+            }
+            foreach (var iface in interfaces)
+                baseParts.Add(GetTypeName(iface, currentNs));
+
+            var baseType = baseParts.Count > 0
+                ? " : " + string.Join(", ", baseParts)
                 : string.Empty;
 
             var writer = new System.Text.StringBuilder();
