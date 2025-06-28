@@ -173,6 +173,18 @@ public class GeneratorTests
         Assert.NotNull(method);
     }
 
+    [Fact]
+    public void Generates_ref_out_methods()
+    {
+        var result = GenerateClass(typeof(RefOutSample));
+        _output.WriteLine(result);
+
+        Assert.Contains("public virtual void Increment(ref System.Int32 value)", result);
+        Assert.Contains("public Action<System.Int32>? Increment_0", result);
+        Assert.Contains("public virtual System.Boolean TryParse(System.String text, out System.Int32 value)", result);
+        Assert.Contains("public Func<System.String, System.Int32, System.Boolean>? TryParse_1", result);
+    }
+
     public class SampleClass
     {
         public int Number { get; set; }
@@ -238,5 +250,11 @@ public class GeneratorTests
             get => string.Empty;
             set { }
         }
+    }
+
+    public class RefOutSample
+    {
+        public void Increment(ref int value) { }
+        public bool TryParse(string text, out int value) { value = 0; return false; }
     }
 }
