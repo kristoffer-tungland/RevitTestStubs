@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>RevitTestStubs</PackageId>
+    <Version>1.0.0</Version>
+    <Description>Source only stubs for a subset of the Revit API used for unit testing.</Description>
+    <PackageTags>revit;stubs;test;source-only</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="**/*.cs" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+</Project>
