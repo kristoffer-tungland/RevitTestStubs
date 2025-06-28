@@ -76,6 +76,7 @@ namespace StubGenerator
             var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .Where(m => !m.IsSpecialName).ToArray();
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            var events = type.GetEvents(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
             int methodIndex = 0;
             foreach (var method in methods)
@@ -143,6 +144,27 @@ namespace StubGenerator
                 writer.AppendLine("        }");
             }
 
+            foreach (var ev in events)
+            {
+                var evType = GetTypeName(ev.EventHandlerType!, currentNs);
+                var invoke = ev.EventHandlerType!.GetMethod("Invoke")!;
+                var evParams = string.Join(", ", invoke.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var evArgs = string.Join(", ", invoke.GetParameters().Select(p => p.Name));
+
+                writer.AppendLine();
+                writer.AppendLine($"        public event {evType}? {ev.Name}");
+                writer.AppendLine("        {");
+                writer.AppendLine($"            add => Configure.{ev.Name} += value;");
+                writer.AppendLine($"            remove => Configure.{ev.Name} -= value;");
+                writer.AppendLine("        }");
+
+                writer.AppendLine();
+                writer.AppendLine($"        public void Raise{ev.Name}({evParams})");
+                writer.AppendLine("        {");
+                writer.AppendLine($"            Configure.{ev.Name}?.Invoke({evArgs});");
+                writer.AppendLine("        }");
+            }
+
             writer.AppendLine("    }");
             writer.AppendLine();
             writer.AppendLine($"    public partial class {type.Name}Configuration");
@@ -180,6 +202,12 @@ namespace StubGenerator
                     writer.AppendLine($"        public Func<{tName}>? get_{prop.Name} {{ get; set; }}");
                 if (prop.CanWrite)
                     writer.AppendLine($"        public Action<{tName}>? set_{prop.Name} {{ get; set; }}");
+            }
+
+            foreach (var ev in events)
+            {
+                var evType = GetTypeName(ev.EventHandlerType!, currentNs);
+                writer.AppendLine($"        public event {evType}? {ev.Name};");
             }
 
             writer.AppendLine("    }");
@@ -235,6 +263,12 @@ namespace StubGenerator
                 var get = prop.CanRead ? " get;" : string.Empty;
                 var set = prop.CanWrite ? " set;" : string.Empty;
                 writer.AppendLine($"        {typeName} {prop.Name} {{{get}{set}}}");
+            }
+
+            foreach (var ev in type.GetEvents(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                var evType = GetTypeName(ev.EventHandlerType!, currentNs);
+                writer.AppendLine($"        event {evType} {ev.Name};");
             }
 
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
@@ -393,6 +427,9 @@ namespace StubGenerator
 
                 foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
                     Add(f.FieldType);
+
+                foreach (var ev in type.GetEvents(BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                    Add(ev.EventHandlerType);
             }
 
             return namespaces;
