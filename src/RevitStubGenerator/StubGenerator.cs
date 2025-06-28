@@ -80,24 +80,52 @@ namespace RevitStubGenerator
             int methodIndex = 0;
             foreach (var method in methods)
             {
+                var genArgs = method.GetGenericArguments();
+                var genericDecl = genArgs.Length > 0 ? "<" + string.Join(", ", genArgs.Select(a => a.Name)) + ">" : string.Empty;
+
                 var parameters = string.Join(", ", method.GetParameters()
                     .Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
                 var args = string.Join(", ", method.GetParameters().Select(p => p.Name));
+                var typeArgsInvoke = string.Join(", ", genArgs.Select(a => $"typeof({a.Name})"));
+                var invokeArgs = string.Join(", ", new[] { args, typeArgsInvoke }.Where(a => !string.IsNullOrEmpty(a)));
+
                 var ret = GetTypeName(method.ReturnType, currentNs);
                 var delegateName = $"{method.Name}_{methodIndex++}";
 
                 writer.AppendLine();
-                writer.AppendLine($"        public virtual {ret} {method.Name}({parameters})");
+                writer.AppendLine($"        public virtual {ret} {method.Name}{genericDecl}({parameters})");
+                if (genArgs.Length > 0)
+                {
+                    foreach (var ga in genArgs)
+                    {
+                        var constraints = new List<string>();
+                        var attrs = ga.GenericParameterAttributes;
+                        if ((attrs & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+                            constraints.Add("class");
+                        if ((attrs & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
+                            constraints.Add("struct");
+                        foreach (var c in ga.GetGenericParameterConstraints())
+                            constraints.Add(GetTypeName(c, currentNs));
+                        if ((attrs & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+                            constraints.Add("new()");
+                        if (constraints.Count > 0)
+                            writer.AppendLine($"            where {ga.Name} : {string.Join(", ", constraints)}");
+                    }
+                }
                 writer.AppendLine("        {");
                 if (method.ReturnType == typeof(void))
                 {
                     writer.AppendLine($"            var del = Configure.{delegateName};");
-                    writer.AppendLine($"            if (del != null) {{ del({args}); return; }}");
+                    writer.AppendLine($"            if (del != null) {{ del({invokeArgs}); return; }}");
                     writer.AppendLine($"            throw new InvalidOperationException(\"{method.Name} not configured.\");");
                 }
                 else
                 {
-                    writer.AppendLine($"            return Configure.{delegateName}?.Invoke({args}) ?? throw new InvalidOperationException(\"{method.Name} not configured.\");");
+                    var call = $"Configure.{delegateName}?.Invoke({invokeArgs}) ?? throw new InvalidOperationException(\"{method.Name} not configured.\")";
+                    if (UsesGenericParameter(method.ReturnType))
+                        writer.AppendLine($"            return ({ret}){call};");
+                    else
+                        writer.AppendLine($"            return {call};");
                 }
                 writer.AppendLine("        }");
             }
@@ -124,7 +152,14 @@ namespace RevitStubGenerator
             foreach (var method in methods)
             {
                 var delegateName = $"{method.Name}_{methodIndex++}";
-                var paramTypes = method.GetParameters().Select(p => GetTypeName(p.ParameterType, currentNs)).ToList();
+                var paramTypes = new List<string>();
+                foreach (var p in method.GetParameters())
+                {
+                    paramTypes.Add(UsesGenericParameter(p.ParameterType) ? "object?" : GetTypeName(p.ParameterType, currentNs));
+                }
+                var genArgs = method.GetGenericArguments();
+                for (int i = 0; i < genArgs.Length; i++)
+                    paramTypes.Add("System.Type");
                 string delegateType;
                 if (method.ReturnType == typeof(void))
                 {
@@ -132,7 +167,7 @@ namespace RevitStubGenerator
                 }
                 else
                 {
-                    paramTypes.Add(GetTypeName(method.ReturnType, currentNs));
+                    paramTypes.Add(UsesGenericParameter(method.ReturnType) ? "object?" : GetTypeName(method.ReturnType, currentNs));
                     delegateType = $"Func<{string.Join(", ", paramTypes)}>";
                 }
                 writer.AppendLine($"        public {delegateType}? {delegateName} {{ get; set; }}");
@@ -205,9 +240,29 @@ namespace RevitStubGenerator
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
                 if (method.IsSpecialName) continue;
+                var genArgs = method.GetGenericArguments();
+                var genericDecl = genArgs.Length > 0 ? "<" + string.Join(", ", genArgs.Select(a => a.Name)) + ">" : string.Empty;
                 var parameters = string.Join(", ", method.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
                 var ret = GetTypeName(method.ReturnType, currentNs);
-                writer.AppendLine($"        {ret} {method.Name}({parameters});");
+                writer.AppendLine($"        {ret} {method.Name}{genericDecl}({parameters});");
+                if (genArgs.Length > 0)
+                {
+                    foreach (var ga in genArgs)
+                    {
+                        var constraints = new List<string>();
+                        var attrs = ga.GenericParameterAttributes;
+                        if ((attrs & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+                            constraints.Add("class");
+                        if ((attrs & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
+                            constraints.Add("struct");
+                        foreach (var c in ga.GetGenericParameterConstraints())
+                            constraints.Add(GetTypeName(c, currentNs));
+                        if ((attrs & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+                            constraints.Add("new()");
+                        if (constraints.Count > 0)
+                            writer.AppendLine($"        where {ga.Name} : {string.Join(", ", constraints)}");
+                    }
+                }
             }
 
             writer.AppendLine("    }");
@@ -368,6 +423,17 @@ namespace RevitStubGenerator
                 return t.Namespace + "." + name;
 
             return name;
+        }
+
+        private static bool UsesGenericParameter(Type t)
+        {
+            if (t.IsGenericParameter)
+                return true;
+            if (t.IsByRef || t.IsPointer || t.IsArray)
+                return UsesGenericParameter(t.GetElementType()!);
+            if (t.IsGenericType)
+                return t.GetGenericArguments().Any(UsesGenericParameter);
+            return false;
         }
     }
 }
