@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Collections.Generic;
 using System.Reflection.Metadata;
 
-namespace RevitStubGenerator
+namespace StubGenerator
 {
     public static class StubGenerator
     {
