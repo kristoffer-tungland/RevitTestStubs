@@ -98,7 +98,7 @@ namespace StubGenerator
                 var genericDecl = genArgs.Length > 0 ? "<" + string.Join(", ", genArgs.Select(a => a.Name)) + ">" : string.Empty;
 
                 var parameters = string.Join(", ", method.GetParameters()
-                    .Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                    .Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 var args = string.Join(", ", method.GetParameters().Select(p => p.Name));
                 var typeArgsInvoke = string.Join(", ", genArgs.Select(a => $"typeof({a.Name})"));
                 var invokeArgs = string.Join(", ", new[] { args, typeArgsInvoke }.Where(a => !string.IsNullOrEmpty(a)));
@@ -148,7 +148,7 @@ namespace StubGenerator
             {
                 var typeName = GetTypeName(prop.PropertyType, currentNs);
                 var indexParams = prop.GetIndexParameters();
-                var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 var paramNames = string.Join(", ", indexParams.Select(p => p.Name));
 
                 writer.AppendLine();
@@ -175,7 +175,7 @@ namespace StubGenerator
             {
                 var evType = GetTypeName(ev.EventHandlerType!, currentNs);
                 var invoke = ev.EventHandlerType!.GetMethod("Invoke")!;
-                var evParams = string.Join(", ", invoke.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var evParams = string.Join(", ", invoke.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 var evArgs = string.Join(", ", invoke.GetParameters().Select(p => p.Name));
 
                 writer.AppendLine();
@@ -204,7 +204,8 @@ namespace StubGenerator
                 var paramTypes = new List<string>();
                 foreach (var p in method.GetParameters())
                 {
-                    paramTypes.Add(UsesGenericParameter(p.ParameterType) ? "object?" : GetTypeName(p.ParameterType, currentNs));
+                    var pt = p.ParameterType.IsByRef ? p.ParameterType.GetElementType()! : p.ParameterType;
+                    paramTypes.Add(UsesGenericParameter(pt) ? "object?" : GetTypeName(pt, currentNs));
                 }
                 var genArgs = method.GetGenericArguments();
                 for (int i = 0; i < genArgs.Length; i++)
@@ -226,7 +227,7 @@ namespace StubGenerator
             {
                 var tName = GetTypeName(prop.PropertyType, currentNs);
                 var indexParams = prop.GetIndexParameters();
-                var paramTypes = string.Join(", ", indexParams.Select(p => GetTypeName(p.ParameterType, currentNs)));
+                var paramTypes = string.Join(", ", indexParams.Select(p => GetTypeName(p.ParameterType.IsByRef ? p.ParameterType.GetElementType()! : p.ParameterType, currentNs)));
                 if (prop.CanRead)
                 {
                     var typeList = string.Join(", ", new[] { paramTypes, tName }.Where(s => !string.IsNullOrEmpty(s)));
@@ -304,7 +305,7 @@ namespace StubGenerator
                 }
                 else
                 {
-                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                     writer.AppendLine($"        {typeName} this[{paramDecl}] {{{get}{set}}}");
                 }
             }
@@ -320,7 +321,7 @@ namespace StubGenerator
                 if (method.IsSpecialName) continue;
                 var genArgs = method.GetGenericArguments();
                 var genericDecl = genArgs.Length > 0 ? "<" + string.Join(", ", genArgs.Select(a => a.Name)) + ">" : string.Empty;
-                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 var ret = GetTypeName(method.ReturnType, currentNs);
                 writer.AppendLine($"        {ret} {method.Name}{genericDecl}({parameters});");
                 if (genArgs.Length > 0)
@@ -381,21 +382,21 @@ namespace StubGenerator
                 }
                 else
                 {
-                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                     writer.AppendLine($"        public {tName} this[{paramDecl}] {{{get}{set}}}");
                 }
             }
 
             foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
             {
-                var parameters = string.Join(", ", ctor.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var parameters = string.Join(", ", ctor.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 writer.AppendLine($"        public {type.Name}({parameters}) {{ }}");
             }
 
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
                 if (method.IsSpecialName) continue;
-                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
                 var ret = GetTypeName(method.ReturnType, currentNs);
                 string body = method.ReturnType == typeof(void) ? "{}" : "=> throw new NotImplementedException();";
                 writer.AppendLine($"        public {ret} {method.Name}({parameters}) {body}");
@@ -412,7 +413,7 @@ namespace StubGenerator
             var usings = CollectNamespaces(type);
 
             var invoke = type.GetMethod("Invoke")!;
-            var parameters = string.Join(", ", invoke.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+            var parameters = string.Join(", ", invoke.GetParameters().Select(p => $"{GetTypeName(p.ParameterType, currentNs, p)} {p.Name}"));
             var ret = GetTypeName(invoke.ReturnType, currentNs);
 
             var writer = new System.Text.StringBuilder();
@@ -488,13 +489,21 @@ namespace StubGenerator
             return namespaces;
         }
 
-        private static string GetTypeName(Type t, string currentNs)
+        private static string GetTypeName(Type t, string currentNs, ParameterInfo? parameter = null)
         {
+            string prefix = string.Empty;
+            if (t.IsByRef)
+            {
+                if (parameter != null)
+                    prefix = parameter.IsOut ? "out " : "ref ";
+                t = t.GetElementType()!;
+            }
+
             if (t == typeof(void))
-                return "void";
+                return prefix + "void";
 
             if (t.IsGenericParameter)
-                return t.Name;
+                return prefix + t.Name;
 
             string name;
             if (t.IsGenericType)
@@ -510,9 +519,9 @@ namespace StubGenerator
             }
 
             if (!string.IsNullOrEmpty(t.Namespace) && t.Namespace != currentNs)
-                return t.Namespace + "." + name;
+                return prefix + t.Namespace + "." + name;
 
-            return name;
+            return prefix + name;
         }
 
         private static bool UsesGenericParameter(Type t)
