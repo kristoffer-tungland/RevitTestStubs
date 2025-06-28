@@ -123,6 +123,25 @@ public class GeneratorTests
     }
 
     [Fact]
+    public void Generates_class_with_interface()
+    {
+        var result = GenerateClass(typeof(InterfaceImpl));
+        _output.WriteLine(result);
+
+        Assert.Contains("public partial class InterfaceImpl : System.IDisposable", result);
+    }
+
+    [Fact]
+    public void Generates_class_without_duplicate_interfaces()
+    {
+        var result = GenerateClass(typeof(DerivedImpl));
+        _output.WriteLine(result);
+
+        Assert.Contains("public partial class DerivedImpl : BaseImpl, System.IDisposable", result);
+        Assert.DoesNotContain("IExample", result);
+    }
+
+    [Fact]
     public void Generates_event_stub()
     {
         var result = GenerateClass(typeof(EventSample));
@@ -179,5 +198,25 @@ public class GeneratorTests
     public class GenericSample
     {
         public T GetValue<T>(string key) => default!;
+    }
+
+    public interface IExample
+    {
+        void Do();
+    }
+
+    public class BaseImpl : IExample
+    {
+        public void Do() { }
+    }
+
+    public class DerivedImpl : BaseImpl, IDisposable
+    {
+        public void Dispose() { }
+    }
+
+    public class InterfaceImpl : IDisposable
+    {
+        public void Dispose() { }
     }
 }
