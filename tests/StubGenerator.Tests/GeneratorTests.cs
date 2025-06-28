@@ -4,7 +4,7 @@ using System.Reflection;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace RevitStubGenerator.Tests;
+namespace StubGenerator.Tests;
 
 public class GeneratorTests
 {
@@ -28,35 +28,35 @@ public class GeneratorTests
 
     private static string GenerateClass(Type type)
     {
-        var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
+        var programType = Assembly.Load("StubGenerator").GetType("StubGenerator.StubGenerator", true)!;
         var method = programType.GetMethod("GenerateClassStub", BindingFlags.Public | BindingFlags.Static)!;
         return (string)method.Invoke(null, new object?[] { type })!;
     }
 
     private static string GenerateInterface(Type type)
     {
-        var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
+        var programType = Assembly.Load("StubGenerator").GetType("StubGenerator.StubGenerator", true)!;
         var method = programType.GetMethod("GenerateInterfaceStub", BindingFlags.Public | BindingFlags.Static)!;
         return (string)method.Invoke(null, new object?[] { type })!;
     }
 
     private static string GenerateEnum(Type type)
     {
-        var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
+        var programType = Assembly.Load("StubGenerator").GetType("StubGenerator.StubGenerator", true)!;
         var method = programType.GetMethod("GenerateEnumStub", BindingFlags.Public | BindingFlags.Static)!;
         return (string)method.Invoke(null, new object?[] { type })!;
     }
 
     private static string GenerateStruct(Type type)
     {
-        var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
+        var programType = Assembly.Load("StubGenerator").GetType("StubGenerator.StubGenerator", true)!;
         var method = programType.GetMethod("GenerateStructStub", BindingFlags.Public | BindingFlags.Static)!;
         return (string)method.Invoke(null, new object?[] { type })!;
     }
 
     private static string GenerateDelegate(Type type)
     {
-        var programType = Assembly.Load("RevitStubGenerator").GetType("RevitStubGenerator.StubGenerator", true)!;
+        var programType = Assembly.Load("StubGenerator").GetType("StubGenerator.StubGenerator", true)!;
         var method = programType.GetMethod("GenerateDelegateStub", BindingFlags.Public | BindingFlags.Static)!;
         return (string)method.Invoke(null, new object?[] { type })!;
     }
@@ -67,7 +67,7 @@ public class GeneratorTests
         var result = GenerateClass(typeof(SampleClass));
         _output.WriteLine(result);
 
-        Assert.Contains("namespace RevitStubGenerator.Tests", result);
+        Assert.Contains("namespace StubGenerator.Tests", result);
         Assert.Contains("public partial class SampleClass", result);
         Assert.Contains("public SampleClassConfiguration Configure", result);
         Assert.Contains("public virtual System.String Echo(System.String text)", result);
@@ -125,7 +125,7 @@ public class GeneratorTests
     [Fact]
     public void GenerateClassStub_is_public()
     {
-        var method = typeof(RevitStubGenerator.StubGenerator).GetMethod("GenerateClassStub", BindingFlags.Public | BindingFlags.Static);
+        var method = typeof(global::StubGenerator.StubGenerator).GetMethod("GenerateClassStub", BindingFlags.Public | BindingFlags.Static);
         Assert.NotNull(method);
     }
 

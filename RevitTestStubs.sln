@@ -7,11 +7,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitTestStubs", "example\RevitTestStubs\RevitTestStubs.csproj", "{CA82C141-E22A-4CCE-ACD5-E987A4A846E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitStubGenerator", "src\RevitStubGenerator\RevitStubGenerator.csproj", "{A5052F16-7CF2-4C78-9F6B-867243693F67}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StubGenerator", "src\StubGenerator\StubGenerator.csproj", "{A5052F16-7CF2-4C78-9F6B-867243693F67}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitStubGenerator.Tests", "tests\RevitStubGenerator.Tests\RevitStubGenerator.Tests.csproj", "{F192128F-7071-42A3-BC02-CCF375A3F05F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StubGenerator.Tests", "tests\StubGenerator.Tests\StubGenerator.Tests.csproj", "{F192128F-7071-42A3-BC02-CCF375A3F05F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

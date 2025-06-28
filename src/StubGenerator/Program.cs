@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace RevitStubGenerator
+namespace StubGenerator
 {
     internal class Program
     {
@@ -9,7 +9,7 @@ namespace RevitStubGenerator
         {
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: RevitStubGenerator <assemblyPath> <outputDir>");
+                Console.WriteLine("Usage: stubgen <assemblyPath> <outputDir>");
                 return;
             }
 
