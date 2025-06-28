@@ -147,13 +147,27 @@ namespace StubGenerator
             foreach (var prop in properties)
             {
                 var typeName = GetTypeName(prop.PropertyType, currentNs);
+                var indexParams = prop.GetIndexParameters();
+                var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                var paramNames = string.Join(", ", indexParams.Select(p => p.Name));
+
                 writer.AppendLine();
-                writer.AppendLine($"        public virtual {typeName} {prop.Name}");
+                if (indexParams.Length == 0)
+                {
+                    writer.AppendLine($"        public virtual {typeName} {prop.Name}");
+                }
+                else
+                {
+                    writer.AppendLine($"        public virtual {typeName} this[{paramDecl}]");
+                }
                 writer.AppendLine("        {");
                 if (prop.CanRead)
-                    writer.AppendLine($"            get => Configure.get_{prop.Name}?.Invoke() ?? throw new InvalidOperationException(\"get_{prop.Name} not configured.\");");
+                    writer.AppendLine($"            get => Configure.get_{prop.Name}?.Invoke({paramNames}) ?? throw new InvalidOperationException(\"get_{prop.Name} not configured.\");");
                 if (prop.CanWrite)
-                    writer.AppendLine($"            set => Configure.set_{prop.Name}?.Invoke(value);");
+                {
+                    var args = string.Join(", ", new[] { paramNames, "value" }.Where(a => !string.IsNullOrEmpty(a)));
+                    writer.AppendLine($"            set => Configure.set_{prop.Name}?.Invoke({args});");
+                }
                 writer.AppendLine("        }");
             }
 
@@ -211,10 +225,18 @@ namespace StubGenerator
             foreach (var prop in properties)
             {
                 var tName = GetTypeName(prop.PropertyType, currentNs);
+                var indexParams = prop.GetIndexParameters();
+                var paramTypes = string.Join(", ", indexParams.Select(p => GetTypeName(p.ParameterType, currentNs)));
                 if (prop.CanRead)
-                    writer.AppendLine($"        public Func<{tName}>? get_{prop.Name} {{ get; set; }}");
+                {
+                    var typeList = string.Join(", ", new[] { paramTypes, tName }.Where(s => !string.IsNullOrEmpty(s)));
+                    writer.AppendLine($"        public Func<{typeList}>? get_{prop.Name} {{ get; set; }}");
+                }
                 if (prop.CanWrite)
-                    writer.AppendLine($"        public Action<{tName}>? set_{prop.Name} {{ get; set; }}");
+                {
+                    var typeList = string.Join(", ", new[] { paramTypes, tName }.Where(s => !string.IsNullOrEmpty(s)));
+                    writer.AppendLine($"        public Action<{typeList}>? set_{prop.Name} {{ get; set; }}");
+                }
             }
 
             foreach (var ev in events)
@@ -275,7 +297,16 @@ namespace StubGenerator
                 var typeName = GetTypeName(prop.PropertyType, currentNs);
                 var get = prop.CanRead ? " get;" : string.Empty;
                 var set = prop.CanWrite ? " set;" : string.Empty;
-                writer.AppendLine($"        {typeName} {prop.Name} {{{get}{set}}}");
+                var indexParams = prop.GetIndexParameters();
+                if (indexParams.Length == 0)
+                {
+                    writer.AppendLine($"        {typeName} {prop.Name} {{{get}{set}}}");
+                }
+                else
+                {
+                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                    writer.AppendLine($"        {typeName} this[{paramDecl}] {{{get}{set}}}");
+                }
             }
 
             foreach (var ev in type.GetEvents(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
@@ -343,7 +374,16 @@ namespace StubGenerator
                 var tName = GetTypeName(prop.PropertyType, currentNs);
                 var get = prop.CanRead ? " get;" : string.Empty;
                 var set = prop.CanWrite ? " set;" : string.Empty;
-                writer.AppendLine($"        public {tName} {prop.Name} {{{get}{set}}}");
+                var indexParams = prop.GetIndexParameters();
+                if (indexParams.Length == 0)
+                {
+                    writer.AppendLine($"        public {tName} {prop.Name} {{{get}{set}}}");
+                }
+                else
+                {
+                    var paramDecl = string.Join(", ", indexParams.Select(p => $"{GetTypeName(p.ParameterType, currentNs)} {p.Name}"));
+                    writer.AppendLine($"        public {tName} this[{paramDecl}] {{{get}{set}}}");
+                }
             }
 
             foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))

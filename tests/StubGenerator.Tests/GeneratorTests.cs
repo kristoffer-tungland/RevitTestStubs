@@ -123,6 +123,17 @@ public class GeneratorTests
     }
 
     [Fact]
+    public void Generates_indexer_property()
+    {
+        var result = GenerateClass(typeof(IndexerSample));
+        _output.WriteLine(result);
+
+        Assert.Contains("public virtual System.String this[System.Int32 index]", result);
+        Assert.Contains("public Func<System.Int32, System.String>? get_Item", result);
+        Assert.Contains("public Action<System.Int32, System.String>? set_Item", result);
+    }
+
+    [Fact]
     public void Generates_class_with_interface()
     {
         var result = GenerateClass(typeof(InterfaceImpl));
@@ -218,5 +229,14 @@ public class GeneratorTests
     public class InterfaceImpl : IDisposable
     {
         public void Dispose() { }
+    }
+
+    public class IndexerSample
+    {
+        public string this[int index]
+        {
+            get => string.Empty;
+            set { }
+        }
     }
 }
