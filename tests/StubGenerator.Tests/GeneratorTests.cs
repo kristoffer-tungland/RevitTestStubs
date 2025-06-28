@@ -123,6 +123,20 @@ public class GeneratorTests
     }
 
     [Fact]
+    public void Generates_event_stub()
+    {
+        var result = GenerateClass(typeof(EventSample));
+        _output.WriteLine(result);
+
+        Assert.Contains("public event System.EventHandler? Happened", result);
+        Assert.Contains("add => Configure.Happened += value", result);
+        Assert.Contains("public void RaiseHappened(System.Object sender, System.EventArgs e)", result);
+        Assert.Contains("Configure.Happened?.Invoke(sender, e)", result);
+        Assert.Contains("public partial class EventSampleConfiguration", result);
+        Assert.Contains("public event System.EventHandler? Happened;", result);
+    }
+
+    [Fact]
     public void GenerateClassStub_is_public()
     {
         var method = typeof(global::StubGenerator.StubGenerator).GetMethod("GenerateClassStub", BindingFlags.Public | BindingFlags.Static);
@@ -156,6 +170,11 @@ public class GeneratorTests
     }
 
     public delegate int SampleDelegate(string text);
+
+    public class EventSample
+    {
+        public event EventHandler? Happened;
+    }
 
     public class GenericSample
     {
